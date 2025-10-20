@@ -26,7 +26,6 @@ app.use(express.urlencoded({extended:true}));
 app.use('/uploads', express.static(UPLOADS));
 app.use(express.static(path.join(__dirname, 'client', 'dist')));
 
-// Multer for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOADS);
@@ -62,7 +61,6 @@ app.get('/api/pages/:id', (req,res)=>{
   res.json(row);
 });
 
-// Fallback to index.html for SPA
 app.get('*', (req,res)=>{
   res.sendFile(path.join(__dirname,'client','dist','index.html'));
 });

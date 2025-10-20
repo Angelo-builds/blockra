@@ -1,6 +1,5 @@
 import React, {useState, useEffect, useRef} from 'react';
 import axios from 'axios';
-
 function Block({block, onEdit, onRemove}) {
   if(block.type === 'text'){
     return (
@@ -19,53 +18,21 @@ function Block({block, onEdit, onRemove}) {
   }
   return null;
 }
-
 export default function App(){
   const [blocks, setBlocks] = useState([]);
   const [pages, setPages] = useState([]);
   const fileRef = useRef();
-
   useEffect(()=>{ fetchPages(); }, []);
-
-  async function fetchPages(){
-    const res = await axios.get('/api/pages');
-    setPages(res.data);
-  }
-
-  function addText(){
-    const id = Date.now();
-    setBlocks([...blocks, {id, type:'text', text:'Edit me'}]);
-  }
-
-  function addImage(file){
-    const fd = new FormData();
-    fd.append('file', file);
-    axios.post('/api/upload', fd).then(res=>{
-      const id = Date.now();
-      setBlocks([...blocks, {id, type:'image', src: res.data.url}]);
-    });
-  }
-
-  function handleDrop(e){
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if(file) addImage(file);
-  }
-  function handleRemove(id){
-    setBlocks(blocks.filter(b=>b.id!==id));
-  }
-  function handleEdit(updated){
-    setBlocks(blocks.map(b=>b.id===updated.id?updated:b));
-  }
-  function savePage(){
-    const name = prompt('Page name','My Page');
-    axios.post('/api/pages', {name, content: blocks}).then(()=>{ alert('Saved'); fetchPages();});
-  }
-
+  async function fetchPages(){ const res = await axios.get('/api/pages'); setPages(res.data); }
+  function addText(){ const id = Date.now(); setBlocks([...blocks, {id, type:'text', text:'Edit me'}]); }
+  function addImage(file){ const fd = new FormData(); fd.append('file', file); axios.post('/api/upload', fd).then(res=>{ const id = Date.now(); setBlocks([...blocks, {id, type:'image', src: res.data.url}]); }); }
+  function handleDrop(e){ e.preventDefault(); const file = e.dataTransfer.files[0]; if(file) addImage(file); }
+  function handleRemove(id){ setBlocks(blocks.filter(b=>b.id!==id)); }
+  function handleEdit(updated){ setBlocks(blocks.map(b=>b.id===updated.id?updated:b)); }
+  function savePage(){ const name = prompt('Page name','My Page'); axios.post('/api/pages', {name, content: blocks}).then(()=>{ alert('Saved'); fetchPages();}); }
   return (
     <div className="app">
-      <header>
-        <h1>Blockra — Drag & Drop Site Builder</h1>
+      <header><h1>Blockra — Drag & Drop Site Builder</h1>
         <div className="actions">
           <button onClick={addText}>Add Text</button>
           <button onClick={()=>fileRef.current.click()}>Upload Image</button>
@@ -74,16 +41,9 @@ export default function App(){
         </div>
       </header>
       <main>
-        <aside className="sidebar">
-          <h3>Saved Pages</h3>
-          <ul>
-            {pages.map(p=><li key={p.id}>{p.name}</li>)}
-          </ul>
-        </aside>
+        <aside className="sidebar"><h3>Saved Pages</h3><ul>{pages.map(p=><li key={p.id}>{p.name}</li>)}</ul></aside>
         <section className="canvas" onDragOver={(e)=>e.preventDefault()} onDrop={handleDrop}>
-          {blocks.map(b=>(
-            <Block key={b.id} block={b} onEdit={handleEdit} onRemove={handleRemove} />
-          ))}
+          {blocks.map(b=>(<Block key={b.id} block={b} onEdit={handleEdit} onRemove={handleRemove} />))}
           <div className="drop-hint">Drop images here</div>
         </section>
       </main>
