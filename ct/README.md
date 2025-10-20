@@ -1,0 +1,1 @@
+Run the installer from Proxmox host with curl ... (see top README)
