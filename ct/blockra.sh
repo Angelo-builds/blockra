@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# =========================================================
-# 🧱 Blockra LXC Installer for Proxmox
+# =================================================
+# 🧱 Blockra LXC Installer for Proxmox VE
 # Author: Angelo-builds
-# =========================================================
+# =================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
@@ -12,7 +12,7 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-13}"  
+var_version="${var_version:-13}"      
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -30,7 +30,7 @@ if [[ -z "${STORAGE:-}" ]]; then
 fi
 
 # ---------------------------------------------------------
-# 🧩 Ensure Debian template exists (+ auto-download)
+# 🧩 Ensure Debian template exists (auto-download)
 # ---------------------------------------------------------
 if ! pveam list local | grep -q "debian-${var_version}-standard"; then
   msg_info "Downloading Debian ${var_version} template..."
@@ -57,6 +57,10 @@ function build_container() {
   msg_info "Creating ${APP} LXC container..."
   CTID=$(pvesh get /cluster/nextid)
 
+  # Static or DHCP IP
+  IP_MODE="dhcp"
+  [[ -n "${var_ip:-}" ]] && IP_MODE="${var_ip}/24"
+
   pct create ${CTID} ${TEMPLATE} \
     --hostname blockra \
     --arch amd64 \
@@ -64,7 +68,7 @@ function build_container() {
     --memory ${var_ram} \
     --swap 512 \
     --rootfs ${STORAGE}:${var_disk} \
-    --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+    --net0 name=eth0,bridge=vmbr0,ip=${IP_MODE},gw=${var_gw:-} \
     --unprivileged ${var_unprivileged} \
     --features nesting=1 \
     --tags ${var_tags} \
@@ -90,6 +94,9 @@ pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.githu
 
 msg_info "Running Blockra in-container installer..."
 pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
+
+# Clear screen before final output
+clear
 msg_ok "Blockra installation completed successfully!"
 
 # ---------------------------------------------------------
@@ -102,7 +109,7 @@ echo -e "\n${INFO} Access your Blockra app at:${CL}"
 echo -e "   🌍  http://${IP}:3000\n"
 
 cat <<'BANNER'
-	____  __           __        
+    ____  __           __        
    / __ )/ /___  _____/ /__ _________ _
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
