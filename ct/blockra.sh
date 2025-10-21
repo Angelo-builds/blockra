@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🚀 Blockra LXC Installer for Proxmox VE
+# 🚀 Blockra LXC Installer for Proxmox VE (Community-Scripts Framework)
 # Maintainer: Angelo-builds
+# Based on: https://github.com/community-scripts/ProxmoxVE
 # ==============================================================================
 
 set -e
@@ -33,16 +34,16 @@ var_unprivileged=${var_unprivileged:-1}
 var_tags=${var_tags:-blockra}
 
 # --- Template absolute path (Fix for Proxmox VE 9) ----------------------------
-TEMPLATE_PATH="/var/lib/vz/template/cache/debian-${var_ver}-standard_${var_ver}-1_amd64.tar.zst"
+TEMPLATE_PATH="/var/lib/vz/template/cache/debian-${var_ver}-standard_${var_ver}.1-1_amd64.tar.zst"
 if [[ ! -f "${TEMPLATE_PATH}" ]]; then
   msg_info "Downloading Debian ${var_ver} LXC template..."
   pveam update >/dev/null
-  pveam download local debian-${var_ver}-standard_${var_ver}-1_amd64.tar.zst >/dev/null
+  pveam download local debian-${var_ver}-standard_${var_ver}.1-1_amd64.tar.zst >/dev/null
   msg_ok "Template Debian ${var_ver} downloaded."
 fi
 TEMPLATE="${TEMPLATE_PATH}"
 
-# --- Manual container creation (works on all Proxmox versions) ----------------
+# --- Manual container creation ------------------------------------------------
 msg_info "Creating LXC container for ${APP}..."
 CTID=$(pvesh get /cluster/nextid)
 pct create ${CTID} ${TEMPLATE} \
@@ -114,6 +115,5 @@ cat <<'EOF'
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
 /_____/_/\____/\___/_/|_|/_/   \__,_/
-
 EOF
 msg_ok "[Blockra] Deployment complete — Have a great day!"
