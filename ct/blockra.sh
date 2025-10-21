@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🚀 Blockra LXC Installer for Proxmox VE
+# 🚀 Blockra LXC Installer for Proxmox VE (Community Scripts Style, FINAL)
 # ==============================================================================
 
 set -e
@@ -15,7 +15,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 header_info
 start
 
-# --- Default values -----------------------------------------------------------
+# --- Set sane defaults even if Advanced Mode left them blank ------------------
 var_hostname=${var_hostname:-blockra}
 var_cpu=${var_cpu:-2}
 var_ram=${var_ram:-2048}
@@ -26,7 +26,7 @@ var_gw=${var_gw:-192.168.1.1}
 var_unprivileged=${var_unprivileged:-1}
 var_tags=${var_tags:-blockra}
 
-# Detect a valid storage for templates
+# --- Detect valid storages ----------------------------------------------------
 TEMPLATE_STORAGE=$(pvesm status -content vztmpl | awk 'NR==2 {print $1}')
 CONTAINER_STORAGE=$(pvesm status -content rootdir | awk 'NR==2 {print $1}')
 
@@ -34,7 +34,11 @@ if [[ -z "$TEMPLATE_STORAGE" ]]; then
   TEMPLATE_STORAGE="local"
 fi
 if [[ -z "$CONTAINER_STORAGE" ]]; then
-  CONTAINER_STORAGE="local-lvm"
+  if pvesm status | awk '{print $1}' | grep -q '^local-lvm$'; then
+    CONTAINER_STORAGE="local-lvm"
+  else
+    CONTAINER_STORAGE="local"
+  fi
 fi
 
 msg_info "Detected storages:"
@@ -42,7 +46,7 @@ echo "  📦 Template Storage: ${TEMPLATE_STORAGE}"
 echo "  💾 Container Storage: ${CONTAINER_STORAGE}"
 
 # --- Ensure Debian 13 template exists ----------------------------------------
-msg_info "Checking Debian ${var_ver} LXC template..."
+msg_info "Checking Debian ${var_ver} template..."
 TEMPLATE_FILE=$(pveam list ${TEMPLATE_STORAGE} | awk '/debian-13/ {print $2}' | tail -n1)
 
 if [[ -z "$TEMPLATE_FILE" ]]; then
@@ -78,7 +82,7 @@ if ! pct create ${CTID} ${TEMPLATE} \
   --unprivileged ${var_unprivileged} \
   --features nesting=1 \
   --tags ${var_tags} >/dev/null 2>&1; then
-  msg_error "Container creation failed (check template or storage)."
+  msg_error "Container creation failed — verify template and storage."
   exit 1
 fi
 msg_ok "LXC Container ${CTID} created."
@@ -120,7 +124,7 @@ else
 fi
 echo ""
 cat <<'EOF'
-    ____  __           __        
+        ____  __           __        
    / __ )/ /___  _____/ /__ _________ _
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
