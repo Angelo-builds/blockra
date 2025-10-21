@@ -34,7 +34,6 @@ echo "[DEBUG] → Storage rilevato: ${STORAGE}"
 # ---------------------------------------------------------
 # 🧩 Ensure Debian template exists (auto-download)
 # ---------------------------------------------------------
-TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
 if ! pveam list local | grep -q "debian-${var_version}-standard"; then
   msg_info "Downloading Debian ${var_version} template..."
   echo "[DEBUG] → Template non trovato, lo scarico..."
@@ -44,6 +43,17 @@ else
   echo "[DEBUG] → Template Debian ${var_version} già disponibile."
   msg_ok "Debian ${var_version} template already available."
 fi
+
+# ---------------------------------------------------------
+# 📦 Select correct Debian template file dynamically
+# ---------------------------------------------------------
+TEMPLATE_FILE=$(pveam list local | grep "debian-${var_version}-standard" | awk '{print $2}' | tail -n 1)
+if [[ -z "$TEMPLATE_FILE" ]]; then
+  msg_error "Template Debian ${var_version} non trovato in local. Scaricalo con: pveam download local debian-${var_version}-standard_*.tar.zst"
+  exit 1
+fi
+TEMPLATE="local:vztmpl/${TEMPLATE_FILE}"
+echo "[DEBUG] → Template selezionato automaticamente: ${TEMPLATE_FILE}"
 
 # ---------------------------------------------------------
 # 🚀 Override build_container to disable remote installer
@@ -106,15 +116,12 @@ echo -e "\n${INFO} Access your Blockra app at:${CL}"
 echo -e "   🌍  http://${IP}:3000\n"
 
 cat <<'BANNER'
-  ____  _            _              _
- |  _ \| | ___   ___| | _____ _ __ | |__   ___ _ __
- | |_) | |/ _ \ / __| |/ / _ \ '_ \| '_ \ / _ \ '__|
- | |_) | | (_) | (__|   <  __/ |_) | | | |  __/ |
- |_____\_|\___/ \___|_|\_\___| .__/|_| |_|\___|_|
-                             |_|
-   /-----------------------------------------------\
-   |  Blockra installation complete — Have a great day! |
-   \-----------------------------------------------/
+	  ____  __           __        
+   / __ )/ /___  _____/ /__ _________ _
+  / __  / / __ \/ ___/ //_// ___/ __ `/ 
+ / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
+/_____/_/\____/\___/_/|_|/_/   \__,_/
+  
 BANNER
 
 echo "[DEBUG] → Script terminato correttamente."
