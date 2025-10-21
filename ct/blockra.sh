@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Blockra LXC Installer for Proxmox VE (Auto Mode)
-# Author: Angelo-builds + AI-enhanced edition
-# ---------------------------------------------------------
+# =========================================================
+# 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode)
+# Author: Angelo-builds + AI-enhanced version
+# =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
@@ -11,10 +12,9 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-13}"
+var_version="${var_version:-12}"      # puoi cambiare in 13 se vuoi
 var_unprivileged="${var_unprivileged:-1}"
-var_install=""
-
+var_install=""                        # disattiviamo l'installer community
 header_info "$APP"
 variables
 color
@@ -26,9 +26,7 @@ start
 # ---------------------------------------------------------
 if [[ -z "${STORAGE:-}" ]]; then
   STORAGE=$(pvesm status -content rootdir | awk 'NR==2{print $1}')
-  if [[ -z "$STORAGE" ]]; then
-    STORAGE="local"
-  fi
+  [[ -z "$STORAGE" ]] && STORAGE="local"
 fi
 msg_info "Using storage: ${STORAGE}"
 
@@ -48,6 +46,7 @@ fi
 # 🚀 Build the container
 # ---------------------------------------------------------
 msg_info "Creating ${APP} LXC on node $(hostname)..."
+var_install="none"        # evita il 404 di community-scripts
 build_container
 description
 
