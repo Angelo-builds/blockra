@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 # =========================================================
-# 🧱 Blockra In-Container Installer (Node + Systemd + Static IP Fix)
+# 🧱 Blockra In-Container Installer (Node + Systemd + Static IP Fix for Debian 13)
 # =========================================================
-
 set -e
 
 APP_HOME="/opt/blockra"
-
-# ---------------------------------------------------------
-# 🧩 Import static IP vars from /etc/environment (if set)
-# ---------------------------------------------------------
 VAR_IP=$(grep "^VAR_IP=" /etc/environment | cut -d= -f2 | xargs || true)
 VAR_GW=$(grep "^VAR_GW=" /etc/environment | cut -d= -f2 | xargs || true)
 
@@ -27,28 +22,24 @@ locale-gen en_US.UTF-8 >/dev/null 2>&1
 update-locale LANG=en_US.UTF-8 >/dev/null 2>&1
 
 # ---------------------------------------------------------
-# 🌐 Force static IP configuration if defined
+# 🌐 Configure static IP for Debian 13 (systemd-networkd)
 # ---------------------------------------------------------
 if [[ -n "$VAR_IP" ]]; then
-  echo "[Network] Applying static IP configuration: ${VAR_IP}"
-  cat <<EOF >/etc/network/interfaces
-auto lo
-iface lo inet loopback
+  echo "[Network] Applying static IP configuration via systemd-networkd"
+  mkdir -p /etc/systemd/network
 
-auto eth0
-iface eth0 inet static
-    address ${VAR_IP}/24
-    gateway ${VAR_GW:-192.168.1.1}
-    dns-nameservers 8.8.8.8
+  cat <<EOF >/etc/systemd/network/10-eth0.network
+[Match]
+Name=eth0
+
+[Network]
+Address=${VAR_IP}/24
+Gateway=${VAR_GW:-192.168.1.1}
+DNS=8.8.8.8
 EOF
 
-  # Disable cloud-init/DHCP if active
-  systemctl stop systemd-networkd || true
-  systemctl disable systemd-networkd || true
-
-  # Restart traditional networking
-  systemctl restart networking || true
-  sleep 3
+  systemctl restart systemd-networkd || true
+  sleep 5
 fi
 
 # ---------------------------------------------------------
@@ -58,7 +49,7 @@ id -u blockra >/dev/null 2>&1 || useradd -r -s /bin/bash blockra
 chown -R blockra:blockra ${APP_HOME}
 
 # ---------------------------------------------------------
-# ⚙️ Install dependencies and build frontend (if present)
+# ⚙️ Install dependencies and build frontend
 # ---------------------------------------------------------
 cd ${APP_HOME}
 npm install --silent || true
