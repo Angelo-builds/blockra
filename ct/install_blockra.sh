@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # =========================================================
-# 🧱 Blockra In-Container Installer (final)
+# 🧱 Blockra In-Container Installer (final stable)
 # =========================================================
 set -e
 
 APP_HOME="/opt/blockra"
-
 echo "[INIT] Installing Blockra inside container..."
 
 # ---------------------------------------------------------
@@ -32,7 +31,6 @@ chown -R blockra:blockra ${APP_HOME}
 # ---------------------------------------------------------
 cd ${APP_HOME}
 npm install --silent || true
-
 if grep -q '"vite"' "${APP_HOME}/package.json" 2>/dev/null; then
   su - blockra -c "cd ${APP_HOME} && npm run build || true"
 fi
@@ -42,6 +40,18 @@ fi
 # ---------------------------------------------------------
 if grep -q "app.listen" "${APP_HOME}/server/index.js" 2>/dev/null; then
   sed -i 's/app\.listen(3000[^)]*/app.listen(3000, "0.0.0.0"/' "${APP_HOME}/server/index.js"
+fi
+
+# ---------------------------------------------------------
+# 🧩 Pre-start test (manual node check)
+# ---------------------------------------------------------
+echo "[DEBUG] Testing Node app before enabling systemd..."
+if node ${APP_HOME}/server/index.js >/dev/null 2>&1 & then
+  sleep 3
+  pkill -f "node ${APP_HOME}/server/index.js" || true
+  echo "[DEBUG] Node test passed."
+else
+  echo "[WARN] Node app failed test run — check your JS entrypoint."
 fi
 
 # ---------------------------------------------------------
@@ -77,9 +87,7 @@ clear
 echo "  ✔️   Blockra installation completed successfully!"
 echo ""
 
-# Ottieni IP reale
 REAL_IP=$(hostname -I | awk '{print $1}')
-
 if ss -tulpn | grep -q ":3000"; then
   echo "  💡   Access your Blockra app at:"
   echo "   🌍  http://${REAL_IP}:3000"
