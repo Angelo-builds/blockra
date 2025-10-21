@@ -9,15 +9,13 @@ set -e
 APP="Blockra"
 var_os="debian"
 var_ver="13"
-REPO_URL="https://github.com/Angelo-builds/blockra.git"
 INSTALL_SCRIPT="https://raw.githubusercontent.com/Angelo-builds/blockra/main/ct/install_blockra.sh"
 
-# --- Load community-scripts framework -----------------------------------------
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 header_info
 start
 
-# --- Default fallback values (for Advanced or missing vars) -------------------
+# --- Default fallback values --------------------------------------------------
 var_hostname=${var_hostname:-blockra}
 var_cpu=${var_cpu:-2}
 var_ram=${var_ram:-2048}
@@ -30,33 +28,30 @@ var_tags=${var_tags:-blockra}
 var_storage=${STORAGE:-local-lvm}
 
 # --- Ensure Debian 13 template exists ----------------------------------------
-msg_info "Checking Debian ${var_ver} LXC template..."
-TEMPLATE_PATH=""
-TEMPLATE_FILE=$(pveam list local | awk '/debian-13/ {print $2}' | tail -n 1)
-
+msg_info "Checking Debian ${var_ver} template..."
+TEMPLATE_FILE=$(pveam list local | awk '/debian-13/ {print $2}' | tail -n1)
 if [[ -z "$TEMPLATE_FILE" ]]; then
-  msg_warn "Debian ${var_ver} template not found — downloading latest..."
+  msg_warn "Template not found, downloading latest..."
   pveam update >/dev/null 2>&1 || true
-  LATEST_TEMPLATE=$(pveam available | grep "debian-${var_ver}-standard" | sort -r | head -n 1 | awk '{print $2}')
-  if [[ -n "$LATEST_TEMPLATE" ]]; then
-    pveam download local "$LATEST_TEMPLATE" >/dev/null 2>&1 || {
-      msg_error "Failed to download template: ${LATEST_TEMPLATE}"
+  LATEST=$(pveam available | grep "debian-${var_ver}-standard" | sort -r | head -n1 | awk '{print $2}')
+  if [[ -n "$LATEST" ]]; then
+    pveam download local "$LATEST" >/dev/null 2>&1 || {
+      msg_error "Failed to download Debian ${var_ver} template."
       exit 1
     }
-    TEMPLATE_PATH="local:vztmpl/${LATEST_TEMPLATE##*/}"
+    TEMPLATE_FILE=$(basename "$LATEST")
   else
-    msg_error "No Debian ${var_ver} template found online!"
+    msg_error "No Debian ${var_ver} template available online."
     exit 1
   fi
-else
-  TEMPLATE_PATH="local:vztmpl/${TEMPLATE_FILE}"
 fi
-msg_ok "Template Debian ${var_ver} ready: ${TEMPLATE_PATH}"
+TEMPLATE="local:vztmpl/${TEMPLATE_FILE}"
+msg_ok "Template Debian ${var_ver} ready: ${TEMPLATE_FILE}"
 
 # --- Create container --------------------------------------------------------
-msg_info "Creating LXC container for ${APP}..."
+msg_info "Creating LXC container..."
 CTID=$(pvesh get /cluster/nextid)
-if ! pct create ${CTID} ${TEMPLATE_PATH} \
+pct create ${CTID} ${TEMPLATE} \
   --hostname ${var_hostname} \
   --arch amd64 \
   --cores ${var_cpu} \
@@ -66,38 +61,37 @@ if ! pct create ${CTID} ${TEMPLATE_PATH} \
   --net0 name=eth0,bridge=${var_bridge},ip=${var_ip},gw=${var_gw} \
   --unprivileged ${var_unprivileged} \
   --features nesting=1 \
-  --tags ${var_tags} >/dev/null 2>&1; then
-  msg_error "Container creation failed — check your template or Proxmox version."
-  exit 1
-fi
-msg_ok "LXC Container ${CTID} created."
+  --tags ${var_tags} >/dev/null 2>&1 || {
+    msg_error "Container creation failed."
+    exit 1
+  }
+msg_ok "Container ${CTID} created."
 
 # --- Start container ---------------------------------------------------------
-msg_info "Starting LXC container..."
+msg_info "Starting container..."
 pct start ${CTID}
 sleep 5
 msg_ok "Container started."
 
-# --- Network check -----------------------------------------------------------
-msg_info "Checking network connectivity..."
+# --- Network test ------------------------------------------------------------
+msg_info "Checking network..."
 for i in {1..10}; do
-  if pct exec ${CTID} -- ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
+  if pct exec ${CTID} -- ping -c1 -W1 8.8.8.8 >/dev/null 2>&1; then
     msg_ok "Network reachable."
     break
   fi
   sleep 2
 done
 
-# --- Run installer inside ----------------------------------------------------
-msg_info "Installing Blockra inside container..."
+# --- Run installer -----------------------------------------------------------
+msg_info "Running Blockra installer..."
 pct exec ${CTID} -- bash -c "apt-get update -y && apt-get install -y curl git >/dev/null"
 pct exec ${CTID} -- bash -c "curl -fsSL ${INSTALL_SCRIPT} | bash"
 msg_ok "Blockra installed."
 
-# --- Detect container IP -----------------------------------------------------
+# --- Detect IP ---------------------------------------------------------------
 REAL_IP=$(pct exec ${CTID} -- hostname -I 2>/dev/null | awk '{print $1}')
 
-# --- Final summary -----------------------------------------------------------
 clear
 msg_ok "✔️  Blockra installation completed successfully!"
 echo ""
@@ -105,7 +99,8 @@ if [[ -n "${REAL_IP}" ]]; then
   echo "  💡  Access your Blockra app at:"
   echo "   🌍  http://${REAL_IP}:3000"
 else
-  echo "  💡  Check DHCP IP via: pct exec ${CTID} -- ip a show eth0"
+  echo "  💡  Check DHCP IP with:"
+  echo "   pct exec ${CTID} -- ip a show eth0"
 fi
 echo ""
 cat <<'EOF'
