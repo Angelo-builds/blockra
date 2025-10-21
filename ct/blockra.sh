@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
-# 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode)
-# Author: Angelo-builds + AI-enhanced final stable version
+# 🧱 Blockra LXC Installer for Proxmox VE
+# Author: Angelo-builds
 # =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
@@ -12,7 +12,7 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-12}"      # Cambia in 13 se vuoi Debian 13
+var_version="${var_version:-13}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -97,6 +97,12 @@ pct exec $CTID -- mkdir -p /opt/blockra
 pct exec $CTID -- bash -lc "apt update >/dev/null 2>&1 || true; apt install -y curl >/dev/null 2>&1 || true"
 pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.github.com/Angelo-builds/blockra/tar.gz/main | tar -xz --strip-components=1"
 
+# Pass network info as environment variables
+if [[ -n "${var_ip:-}" ]]; then
+  pct exec $CTID -- bash -lc "echo 'VAR_IP=${var_ip}' >> /etc/environment"
+  [[ -n "${var_gw:-}" ]] && pct exec $CTID -- bash -lc "echo 'VAR_GW=${var_gw}' >> /etc/environment"
+fi
+
 msg_info "Running Blockra in-container installer..."
 pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
 
@@ -121,5 +127,5 @@ cat <<'BANNER'
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
 /_____/_/\____/\___/_/|_|/_/   \__,_/
-   
+
 BANNER
