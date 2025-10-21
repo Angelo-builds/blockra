@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode + DEBUG)
-# Author: Angelo-builds + AI-enhanced version
+# Author: Angelo-builds + AI-enhanced final version
 # =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
@@ -46,14 +46,14 @@ else
 fi
 
 # ---------------------------------------------------------
-# 🚀 Override build_container here (AFTER start)
+# 🚀 Override build_container to disable remote installer
 # ---------------------------------------------------------
 echo "[DEBUG] → Ridefinisco la funzione build_container per evitare il 404 community-scripts..."
 
 function build_container() {
   msg_info "Creating ${APP} LXC container (custom build_container)..."
-  CTID=$(pve_nextid)
-  echo "[DEBUG] → Nuovo CTID: ${CTID}"
+  CTID=$(pvesh get /cluster/nextid)
+  echo "[DEBUG] → Nuovo CTID assegnato da pvesh: ${CTID}"
 
   pct create ${CTID} ${TEMPLATE} \
     --hostname blockra \
@@ -68,7 +68,7 @@ function build_container() {
     --tags ${var_tags} \
     >/dev/null
 
-  echo "[DEBUG] → Container creato, ora avvio..."
+  echo "[DEBUG] → Container ${CTID} creato, ora avvio..."
   pct start ${CTID}
   msg_ok "LXC Container ${CTID} created and started."
 }
@@ -109,8 +109,8 @@ cat <<'BANNER'
   ____  _            _              _
  |  _ \| | ___   ___| | _____ _ __ | |__   ___ _ __
  | |_) | |/ _ \ / __| |/ / _ \ '_ \| '_ \ / _ \ '__|
- |  _ <| | (_) | (__|   <  __/ |_) | | | |  __/ |
- |_| \_\_|\___/ \___|_|\_\___| .__/|_| |_|\___|_|
+ | |_) | | (_) | (__|   <  __/ |_) | | | |  __/ |
+ |_____\_|\___/ \___|_|\_\___| .__/|_| |_|\___|_|
                              |_|
    /-----------------------------------------------\
    |  Blockra installation complete — Have a great day! |
