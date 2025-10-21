@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
-# 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode)
-# Author: Angelo-builds + AI-enhanced version (Final Fix)
+# 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode + DEBUG)
+# Author: Angelo-builds + AI-enhanced version
 # =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
@@ -20,14 +20,40 @@ color
 catch_errors
 start
 
-# ---------------------------------------------------------
-# 🧩 Override build_container to disable remote installer
-# ---------------------------------------------------------
-function build_container() {
-  msg_info "Creating ${APP} container..."
+echo "[DEBUG] → Script avviato, framework community-scripts caricato correttamente."
 
+# ---------------------------------------------------------
+# 🔍 Detect default storage automatically
+# ---------------------------------------------------------
+if [[ -z "${STORAGE:-}" ]]; then
+  STORAGE=$(pvesm status -content rootdir | awk 'NR==2{print $1}')
+  [[ -z "$STORAGE" ]] && STORAGE="local"
+fi
+echo "[DEBUG] → Storage rilevato: ${STORAGE}"
+
+# ---------------------------------------------------------
+# 🧩 Ensure Debian template exists (auto-download)
+# ---------------------------------------------------------
+TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
+if ! pveam list local | grep -q "debian-${var_version}-standard"; then
+  msg_info "Downloading Debian ${var_version} template..."
+  echo "[DEBUG] → Template non trovato, lo scarico..."
+  pveam download local "debian-${var_version}-standard_${var_version}-1_amd64.tar.zst" >/dev/null 2>&1
+  msg_ok "Template downloaded successfully."
+else
+  echo "[DEBUG] → Template Debian ${var_version} già disponibile."
+  msg_ok "Debian ${var_version} template already available."
+fi
+
+# ---------------------------------------------------------
+# 🚀 Override build_container here (AFTER start)
+# ---------------------------------------------------------
+echo "[DEBUG] → Ridefinisco la funzione build_container per evitare il 404 community-scripts..."
+
+function build_container() {
+  msg_info "Creating ${APP} LXC container (custom build_container)..."
   CTID=$(pve_nextid)
-  TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
+  echo "[DEBUG] → Nuovo CTID: ${CTID}"
 
   pct create ${CTID} ${TEMPLATE} \
     --hostname blockra \
@@ -40,38 +66,20 @@ function build_container() {
     --unprivileged ${var_unprivileged} \
     --features nesting=1 \
     --tags ${var_tags} \
-    --start >/dev/null
+    >/dev/null
 
+  echo "[DEBUG] → Container creato, ora avvio..."
+  pct start ${CTID}
   msg_ok "LXC Container ${CTID} created and started."
 }
 
 # ---------------------------------------------------------
-# 🔍 Detect default storage automatically
+# 🚀 Build the container (safe version)
 # ---------------------------------------------------------
-if [[ -z "${STORAGE:-}" ]]; then
-  STORAGE=$(pvesm status -content rootdir | awk 'NR==2{print $1}')
-  [[ -z "$STORAGE" ]] && STORAGE="local"
-fi
-msg_info "Using storage: ${STORAGE}"
-
-# ---------------------------------------------------------
-# 🧩 Ensure Debian template exists (auto-download)
-# ---------------------------------------------------------
-TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
-if ! pveam list local | grep -q "debian-${var_version}-standard"; then
-  msg_info "Downloading Debian ${var_version} template..."
-  pveam download local "debian-${var_version}-standard_${var_version}-1_amd64.tar.zst" >/dev/null 2>&1
-  msg_ok "Template downloaded successfully."
-else
-  msg_ok "Debian ${var_version} template already available."
-fi
-
-# ---------------------------------------------------------
-# 🚀 Build container (no remote installer)
-# ---------------------------------------------------------
-msg_info "Creating ${APP} LXC on node $(hostname)..."
+echo "[DEBUG] → Avvio build_container (versione custom, senza community installer)..."
 build_container
 description
+echo "[DEBUG] → Container creato correttamente, procedo con installazione Blockra."
 
 # ---------------------------------------------------------
 # 📂 Copy installer + run inside container
@@ -82,9 +90,11 @@ pct exec $CTID -- bash -lc "apt update >/dev/null 2>&1 || true; apt install -y c
 pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.github.com/Angelo-builds/blockra/tar.gz/main | tar -xz --strip-components=1"
 
 msg_info "Running Blockra in-container installer..."
+echo "[DEBUG] → Avvio install_blockra.sh dentro il container..."
 pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
 
 msg_ok "Blockra installation completed successfully!"
+echo "[DEBUG] → Installazione Blockra completata senza errori."
 
 # ---------------------------------------------------------
 # 🌐 Show connection info
@@ -106,3 +116,5 @@ cat <<'BANNER'
    |  Blockra installation complete — Have a great day! |
    \-----------------------------------------------/
 BANNER
+
+echo "[DEBUG] → Script terminato correttamente."
