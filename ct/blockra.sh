@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 🚀 Blockra LXC Installer for Proxmox VE
-# Author/Maintainer: Angelo-builds
+# Maintainer: Angelo-builds
 # ==============================================================================
 
 set -e
