@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 🧱 Blockra LXC Installer for Proxmox VE
-# Author: Angelo-builds
+# 🚀 Blockra LXC Installer for Proxmox VE
+# Author/Maintainer: Angelo-builds
 # ==============================================================================
 
 set -e
@@ -70,9 +70,13 @@ fi
 clear
 msg_ok "Blockra installation completed successfully!"
 echo ""
+
+# Recupera IP reale dal container
+REAL_IP=$(pct exec ${CTID} -- hostname -I 2>/dev/null | awk '{print $1}')
+
 echo "  💡 Access your ${APP} app at:"
-if [[ -n "${var_ip}" ]]; then
-  echo "   🌍  http://${var_ip%/*}:3000"
+if [[ -n "${REAL_IP}" ]]; then
+  echo "   🌍  http://${REAL_IP}:3000"
 else
   echo "   🌍  (Check DHCP IP with: pct exec ${CTID} -- ip a show eth0)"
 fi
