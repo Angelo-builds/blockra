@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# =================================================
-# 🧱 Blockra LXC Installer for Proxmox VE
-# Author: Angelo-builds
-# =================================================
+# =========================================================
+# 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode)
+# Author: Angelo-builds + AI-enhanced final stable version
+# =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
@@ -12,7 +12,7 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-13}"      
+var_version="${var_version:-12}"      # Cambia in 13 se vuoi Debian 13
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -57,9 +57,14 @@ function build_container() {
   msg_info "Creating ${APP} LXC container..."
   CTID=$(pvesh get /cluster/nextid)
 
-  # Static or DHCP IP
-  IP_MODE="dhcp"
-  [[ -n "${var_ip:-}" ]] && IP_MODE="${var_ip}/24"
+  # Build dynamic network configuration
+  NETCONF="name=eth0,bridge=${var_br:-vmbr0}"
+  if [[ -n "${var_ip:-}" ]]; then
+    NETCONF+=",ip=${var_ip}/24"
+    [[ -n "${var_gw:-}" ]] && NETCONF+=",gw=${var_gw}"
+  else
+    NETCONF+=",ip=dhcp"
+  fi
 
   pct create ${CTID} ${TEMPLATE} \
     --hostname blockra \
@@ -68,7 +73,7 @@ function build_container() {
     --memory ${var_ram} \
     --swap 512 \
     --rootfs ${STORAGE}:${var_disk} \
-    --net0 name=eth0,bridge=vmbr0,ip=${IP_MODE},gw=${var_gw:-} \
+    --net0 "${NETCONF}" \
     --unprivileged ${var_unprivileged} \
     --features nesting=1 \
     --tags ${var_tags} \
@@ -95,7 +100,9 @@ pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.githu
 msg_info "Running Blockra in-container installer..."
 pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
 
-# Clear screen before final output
+# ---------------------------------------------------------
+# 🧹 Clear screen & final message
+# ---------------------------------------------------------
 clear
 msg_ok "Blockra installation completed successfully!"
 
@@ -114,5 +121,5 @@ cat <<'BANNER'
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
 /_____/_/\____/\___/_/|_|/_/   \__,_/
-
+   
 BANNER
