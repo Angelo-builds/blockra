@@ -45,9 +45,9 @@ else
 fi
 
 # ---------------------------------------------------------
-# 📦 Select correct Debian template file dynamically
+# 📦 Select correct Debian template file dynamically (FIXED)
 # ---------------------------------------------------------
-TEMPLATE_FILE=$(pveam list local | grep "debian-${var_version}-standard" | awk '{print $2}' | tail -n 1)
+TEMPLATE_FILE=$(pveam list local | grep "debian-${var_version}-standard" | awk '{print $1}' | sed 's/local:vztmpl\///' | tail -n 1)
 if [[ -z "$TEMPLATE_FILE" ]]; then
   msg_error "Template Debian ${var_version} non trovato in local. Scaricalo con: pveam download local debian-${var_version}-standard_*.tar.zst"
   exit 1
@@ -56,7 +56,7 @@ TEMPLATE="local:vztmpl/${TEMPLATE_FILE}"
 echo "[DEBUG] → Template selezionato automaticamente: ${TEMPLATE_FILE}"
 
 # ---------------------------------------------------------
-# 🚀 Override build_container to disable remote installer
+# 🚀 Custom build_container (no community installer)
 # ---------------------------------------------------------
 echo "[DEBUG] → Ridefinisco la funzione build_container per evitare il 404 community-scripts..."
 
@@ -84,7 +84,7 @@ function build_container() {
 }
 
 # ---------------------------------------------------------
-# 🚀 Build the container (safe version)
+# 🚀 Build the container
 # ---------------------------------------------------------
 echo "[DEBUG] → Avvio build_container (versione custom, senza community installer)..."
 build_container
@@ -116,12 +116,15 @@ echo -e "\n${INFO} Access your Blockra app at:${CL}"
 echo -e "   🌍  http://${IP}:3000\n"
 
 cat <<'BANNER'
-	  ____  __           __        
+	____  __           __        
    / __ )/ /___  _____/ /__ _________ _
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
 /_____/_/\____/\___/_/|_|/_/   \__,_/
-  
+
+   /-----------------------------------------------\
+   |  Blockra installation complete — Have a great day! |
+   \-----------------------------------------------/
 BANNER
 
 echo "[DEBUG] → Script terminato correttamente."
