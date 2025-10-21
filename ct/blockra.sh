@@ -1,131 +1,88 @@
 #!/usr/bin/env bash
-# =========================================================
+# ==============================================================================
 # 🧱 Blockra LXC Installer for Proxmox VE
 # Author: Angelo-builds
-# =========================================================
+# ==============================================================================
 
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+set -e
 
 APP="Blockra"
-var_tags="${var_tags:-site-builder}"
-var_cpu="${var_cpu:-2}"
-var_ram="${var_ram:-2048}"
-var_disk="${var_disk:-8}"
-var_os="${var_os:-debian}"
-var_version="${var_version:-13}"
-var_unprivileged="${var_unprivileged:-1}"
+var_os="debian"
+var_ver="13"
+REPO_URL="https://github.com/Angelo-builds/blockra.git"
+INSTALL_SCRIPT="https://raw.githubusercontent.com/Angelo-builds/blockra/main/ct/install_blockra.sh"
 
-header_info "$APP"
-variables
-color
-catch_errors
+# --- Load the community build framework --------------------------------------
+source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+
+# --- Define App Metadata ------------------------------------------------------
+header_info
+echo -e "  🧩 Installing ${APP} on Proxmox VE using Community Framework...\n"
+
+# --- Defaults ---------------------------------------------------------------
+var_tags="blockra"
+var_disk="8"
+var_cpu="2"
+var_ram="2048"
+var_unprivileged="1"
+var_os_release="${var_os}-${var_ver}-standard_${var_ver}-1_amd64.tar.zst"
+TEMPLATE="local:vztmpl/${var_os_release}"
+
+# --- Prompt user with standard/advanced menu ---------------------------------
 start
-
-# ---------------------------------------------------------
-# 🔍 Detect default storage automatically
-# ---------------------------------------------------------
-if [[ -z "${STORAGE:-}" ]]; then
-  STORAGE=$(pvesm status -content rootdir | awk 'NR==2{print $1}')
-  [[ -z "$STORAGE" ]] && STORAGE="local"
-fi
-
-# ---------------------------------------------------------
-# 🧩 Ensure Debian template exists (auto-download)
-# ---------------------------------------------------------
-if ! pveam list local | grep -q "debian-${var_version}-standard"; then
-  msg_info "Downloading Debian ${var_version} template..."
-  pveam download local "debian-${var_version}-standard_${var_version}-1_amd64.tar.zst" >/dev/null 2>&1
-  msg_ok "Template downloaded successfully."
-else
-  msg_ok "Debian ${var_version} template already available."
-fi
-
-# ---------------------------------------------------------
-# 📦 Select correct Debian template file dynamically
-# ---------------------------------------------------------
-TEMPLATE_FILE=$(pveam list local | grep "debian-${var_version}-standard" | awk '{print $1}' | sed 's/local:vztmpl\///' | tail -n 1)
-if [[ -z "$TEMPLATE_FILE" ]]; then
-  msg_error "Template Debian ${var_version} non trovato. Esegui: pveam download local debian-${var_version}-standard_*.tar.zst"
-  exit 1
-fi
-TEMPLATE="local:vztmpl/${TEMPLATE_FILE}"
-
-# ---------------------------------------------------------
-# 🚀 Custom build_container (no community installer)
-# ---------------------------------------------------------
-function build_container() {
-  msg_info "Creating ${APP} LXC container..."
-  CTID=$(pvesh get /cluster/nextid)
-
-  # Build dynamic network configuration
-  NETCONF="name=eth0,bridge=${var_br:-vmbr0}"
-  if [[ -n "${var_ip:-}" ]]; then
-    NETCONF+=",ip=${var_ip}/24"
-    [[ -n "${var_gw:-}" ]] && NETCONF+=",gw=${var_gw}"
-  else
-    NETCONF+=",ip=dhcp"
-  fi
-
-  pct create ${CTID} ${TEMPLATE} \
-    --hostname blockra \
-    --arch amd64 \
-    --cores ${var_cpu} \
-    --memory ${var_ram} \
-    --swap 512 \
-    --rootfs ${STORAGE}:${var_disk} \
-    --net0 "${NETCONF}" \
-    --unprivileged ${var_unprivileged} \
-    --features nesting=1 \
-    --tags ${var_tags} \
-    >/dev/null
-
-  pct start ${CTID}
-  msg_ok "LXC Container ${CTID} created and started."
-}
-
-# ---------------------------------------------------------
-# 🚀 Build the container
-# ---------------------------------------------------------
 build_container
-description
 
-# ---------------------------------------------------------
-# 📂 Copy installer + run inside container
-# ---------------------------------------------------------
-msg_info "Copying installer files into the container..."
-pct exec $CTID -- mkdir -p /opt/blockra
-pct exec $CTID -- bash -lc "apt update >/dev/null 2>&1 || true; apt install -y curl >/dev/null 2>&1 || true"
-pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.github.com/Angelo-builds/blockra/tar.gz/main | tar -xz --strip-components=1"
-
-# Pass network info as environment variables
-if [[ -n "${var_ip:-}" ]]; then
-  pct exec $CTID -- bash -lc "echo 'VAR_IP=${var_ip}' >> /etc/environment"
-  [[ -n "${var_gw:-}" ]] && pct exec $CTID -- bash -lc "echo 'VAR_GW=${var_gw}' >> /etc/environment"
+# --- Static IP fix (host-side) -----------------------------------------------
+if [[ -n "${var_ip}" && "${var_ip}" != "dhcp" ]]; then
+  CONF_PATH="/etc/pve/lxc/${CTID}.conf"
+  msg_info "Applying static IP configuration to ${CONF_PATH}"
+  sed -i "s|ip=.*|ip=${var_ip},gw=${var_gw:-192.168.1.1}|" "$CONF_PATH" || true
+  msg_ok "Static IP ${var_ip} set successfully."
 fi
 
-msg_info "Running Blockra in-container installer..."
-pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
+# --- Clone repository inside container --------------------------------------
+msg_info "Cloning ${APP} repository..."
+pct exec ${CTID} -- bash -c "apt-get update -y >/dev/null && apt-get install -y git >/dev/null"
+pct exec ${CTID} -- bash -c "git clone ${REPO_URL} /opt/blockra >/dev/null"
+msg_ok "Repository cloned."
 
-# ---------------------------------------------------------
-# 🧹 Clear screen & final message
-# ---------------------------------------------------------
+# --- Export variables for installer -----------------------------------------
+pct exec ${CTID} -- bash -c "echo VAR_IP='${var_ip%/*}' >> /etc/environment"
+pct exec ${CTID} -- bash -c "echo VAR_GW='${var_gw}' >> /etc/environment"
+
+# --- Run installer inside container -----------------------------------------
+msg_info "Running ${APP} installer..."
+pct exec ${CTID} -- bash -c "curl -fsSL ${INSTALL_SCRIPT} | bash"
+msg_ok "Installation script executed."
+
+# --- Health Check -----------------------------------------------------------
+msg_info "Performing health check..."
+sleep 5
+if [[ -n "${var_ip}" ]]; then
+  if pct exec ${CTID} -- bash -c "ss -tulpn | grep -q ':3000'"; then
+    msg_ok "${APP} is running and listening on port 3000"
+  else
+    msg_warn "${APP} did not start automatically. Check logs with: journalctl -u blockra.service -b"
+  fi
+fi
+
+# --- Final Message ----------------------------------------------------------
 clear
 msg_ok "Blockra installation completed successfully!"
-
-# ---------------------------------------------------------
-# 🌐 Show connection info
-# ---------------------------------------------------------
-IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
-[[ -z "$IP" ]] && IP="<container-ip>"
-
-echo -e "\n${INFO} Access your Blockra app at:${CL}"
-echo -e "   🌍  http://${IP}:3000\n"
-
-cat <<'BANNER'
+echo ""
+echo "  💡 Access your ${APP} app at:"
+if [[ -n "${var_ip}" ]]; then
+  echo "   🌍  http://${var_ip%/*}:3000"
+else
+  echo "   🌍  (Check DHCP IP with: pct exec ${CTID} -- ip a show eth0)"
+fi
+echo ""
+cat <<'EOF'
     ____  __           __        
    / __ )/ /___  _____/ /__ _________ _
   / __  / / __ \/ ___/ //_// ___/ __ `/ 
  / /_/ / / /_/ / /__/ ,<  / /  / /_/ / 
 /_____/_/\____/\___/_/|_|/_/   \__,_/
 
-BANNER
+EOF
+msg_ok "[Blockra] Deployment complete — Have a great day!"
