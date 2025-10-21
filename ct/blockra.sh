@@ -17,7 +17,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 header_info
 start
 
-# --- Force defaults if blank (Advanced mode failsafes) ------------------------
+# --- Default fallback values (for Advanced or missing vars) -------------------
 var_hostname=${var_hostname:-blockra}
 var_cpu=${var_cpu:-2}
 var_ram=${var_ram:-2048}
@@ -29,20 +29,34 @@ var_unprivileged=${var_unprivileged:-1}
 var_tags=${var_tags:-blockra}
 var_storage=${STORAGE:-local-lvm}
 
-# --- Make sure Debian 13 template exists -------------------------------------
+# --- Ensure Debian 13 template exists ----------------------------------------
 msg_info "Checking Debian ${var_ver} LXC template..."
-if ! pveam list local | grep -q "debian-${var_ver}-standard"; then
-  pveam update >/dev/null
-  pveam download local debian-${var_ver}-standard_${var_ver}.0-1_amd64.tar.zst >/dev/null
-fi
-msg_ok "Template Debian ${var_ver} ready."
+TEMPLATE_PATH=""
+TEMPLATE_FILE=$(pveam list local | awk '/debian-13/ {print $2}' | tail -n 1)
 
-TEMPLATE="local:vztmpl/debian-${var_ver}-standard_${var_ver}.0-1_amd64.tar.zst"
+if [[ -z "$TEMPLATE_FILE" ]]; then
+  msg_warn "Debian ${var_ver} template not found — downloading latest..."
+  pveam update >/dev/null 2>&1 || true
+  LATEST_TEMPLATE=$(pveam available | grep "debian-${var_ver}-standard" | sort -r | head -n 1 | awk '{print $2}')
+  if [[ -n "$LATEST_TEMPLATE" ]]; then
+    pveam download local "$LATEST_TEMPLATE" >/dev/null 2>&1 || {
+      msg_error "Failed to download template: ${LATEST_TEMPLATE}"
+      exit 1
+    }
+    TEMPLATE_PATH="local:vztmpl/${LATEST_TEMPLATE##*/}"
+  else
+    msg_error "No Debian ${var_ver} template found online!"
+    exit 1
+  fi
+else
+  TEMPLATE_PATH="local:vztmpl/${TEMPLATE_FILE}"
+fi
+msg_ok "Template Debian ${var_ver} ready: ${TEMPLATE_PATH}"
 
 # --- Create container --------------------------------------------------------
 msg_info "Creating LXC container for ${APP}..."
 CTID=$(pvesh get /cluster/nextid)
-pct create ${CTID} ${TEMPLATE} \
+if ! pct create ${CTID} ${TEMPLATE_PATH} \
   --hostname ${var_hostname} \
   --arch amd64 \
   --cores ${var_cpu} \
@@ -52,8 +66,10 @@ pct create ${CTID} ${TEMPLATE} \
   --net0 name=eth0,bridge=${var_bridge},ip=${var_ip},gw=${var_gw} \
   --unprivileged ${var_unprivileged} \
   --features nesting=1 \
-  --tags ${var_tags} \
-  >/dev/null
+  --tags ${var_tags} >/dev/null 2>&1; then
+  msg_error "Container creation failed — check your template or Proxmox version."
+  exit 1
+fi
 msg_ok "LXC Container ${CTID} created."
 
 # --- Start container ---------------------------------------------------------
@@ -81,7 +97,7 @@ msg_ok "Blockra installed."
 # --- Detect container IP -----------------------------------------------------
 REAL_IP=$(pct exec ${CTID} -- hostname -I 2>/dev/null | awk '{print $1}')
 
-# --- Clean output ------------------------------------------------------------
+# --- Final summary -----------------------------------------------------------
 clear
 msg_ok "✔️  Blockra installation completed successfully!"
 echo ""
