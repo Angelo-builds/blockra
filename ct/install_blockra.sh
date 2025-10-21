@@ -40,8 +40,8 @@ fi
 # ---------------------------------------------------------
 # 🛠️ Ensure backend listens on 0.0.0.0
 # ---------------------------------------------------------
-if grep -q "app.listen" "${APP_HOME}/index.js" 2>/dev/null; then
-  sed -i 's/app\.listen(3000[^)]*/app.listen(3000, "0.0.0.0"/' "${APP_HOME}/index.js"
+if grep -q "app.listen" "${APP_HOME}/server/index.js" 2>/dev/null; then
+  sed -i 's/app\.listen(3000[^)]*/app.listen(3000, "0.0.0.0"/' "${APP_HOME}/server/index.js"
 fi
 
 # ---------------------------------------------------------
@@ -56,7 +56,7 @@ After=network-online.target
 Type=simple
 User=blockra
 WorkingDirectory=${APP_HOME}
-ExecStart=/usr/bin/node ${APP_HOME}/index.js
+ExecStart=/usr/bin/node ${APP_HOME}/server/index.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
@@ -76,10 +76,13 @@ sleep 5
 clear
 echo "  ✔️   Blockra installation completed successfully!"
 echo ""
+
+# Ottieni IP reale
+REAL_IP=$(hostname -I | awk '{print $1}')
+
 if ss -tulpn | grep -q ":3000"; then
-  IP=$(hostname -I | awk '{print $1}')
   echo "  💡   Access your Blockra app at:"
-  echo "   🌍  http://${IP}:3000"
+  echo "   🌍  http://${REAL_IP}:3000"
 else
   echo "  ⚠️   Blockra service not listening. Check with:"
   echo "       journalctl -u blockra.service -b | tail -30"
