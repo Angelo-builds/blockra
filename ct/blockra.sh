@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# ----------------------------------------------------------------------------------
-# Blockra LXC Installer for Proxmox VE
-# ----------------------------------------------------------------------------------
+# Blockra LXC Installer for Proxmox VE (Auto Mode)
+# Author: Angelo-builds + AI-enhanced edition
+# ---------------------------------------------------------
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+
 APP="Blockra"
+var_tags="${var_tags:-site-builder}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-12}"
+var_version="${var_version:-13}"
 var_unprivileged="${var_unprivileged:-1}"
+var_install=""
 
 header_info "$APP"
 variables
@@ -18,62 +21,66 @@ color
 catch_errors
 start
 
-# --- CONFIG ---
-OSTYPE="${var_os}-${var_version}"
-TEMPLATE="local:vztmpl/${OSTYPE}-standard_12-1_amd64.tar.zst"
-STORAGE=${STORAGE:-local-lvm}
-CTID=$(pvesh get /cluster/nextid)
+# ---------------------------------------------------------
+# 🔍 Detect default storage automatically
+# ---------------------------------------------------------
+if [[ -z "${STORAGE:-}" ]]; then
+  STORAGE=$(pvesm status -content rootdir | awk 'NR==2{print $1}')
+  if [[ -z "$STORAGE" ]]; then
+    STORAGE="local"
+  fi
+fi
+msg_info "Using storage: ${STORAGE}"
 
-msg_info "Checking template..."
-if ! pveam list local | grep -q "${OSTYPE}"; then
-    msg_info "Downloading template ${OSTYPE}..."
-    pveam download local ${OSTYPE}-standard_12-1_amd64.tar.zst >/dev/null 2>&1
-    msg_ok "Template ${OSTYPE} downloaded."
+# ---------------------------------------------------------
+# 🧩 Ensure Debian template exists (auto-download)
+# ---------------------------------------------------------
+TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
+if ! pveam list local | grep -q "debian-${var_version}-standard"; then
+  msg_info "Downloading Debian ${var_version} template..."
+  pveam download local "debian-${var_version}-standard_${var_version}-1_amd64.tar.zst" >/dev/null 2>&1
+  msg_ok "Template downloaded successfully."
+else
+  msg_ok "Debian ${var_version} template already available."
 fi
 
-msg_info "Creating LXC container for Blockra..."
-pct create ${CTID} ${TEMPLATE} \
-  --hostname blockra \
-  --arch amd64 \
-  --cores ${var_cpu} \
-  --memory ${var_ram} \
-  --swap 512 \
-  --rootfs ${STORAGE}:${var_disk} \
-  --net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  --unprivileged ${var_unprivileged} \
-  --features nesting=1 \
-  --tags blockra >/dev/null
+# ---------------------------------------------------------
+# 🚀 Build the container
+# ---------------------------------------------------------
+msg_info "Creating ${APP} LXC on node $(hostname)..."
+build_container
+description
 
-msg_ok "Container ${CTID} created successfully."
+# ---------------------------------------------------------
+# 📂 Copy installer + run inside container
+# ---------------------------------------------------------
+msg_info "Copying installer files into the container..."
+pct exec $CTID -- mkdir -p /opt/blockra
+pct exec $CTID -- bash -lc "apt update >/dev/null 2>&1 || true; apt install -y curl >/dev/null 2>&1 || true"
+pct exec $CTID -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.github.com/Angelo-builds/blockra/tar.gz/main | tar -xz --strip-components=1"
 
-msg_info "Starting LXC container..."
-pct start ${CTID}
-sleep 5
-msg_ok "Container started."
+msg_info "Running Blockra in-container installer..."
+pct exec $CTID -- bash -lc "bash /opt/blockra/ct/install_blockra.sh" || true
 
-msg_info "Installing Blockra inside the container..."
-pct exec ${CTID} -- bash -c "apt update >/dev/null 2>&1 || true; apt install -y curl >/dev/null 2>&1 || true"
-pct exec ${CTID} -- mkdir -p /opt/blockra
-pct exec ${CTID} -- bash -lc "cd /opt/blockra && curl -fsSL https://codeload.github.com/Angelo-builds/blockra/tar.gz/main | tar -xz --strip-components=1"
-pct exec ${CTID} -- bash -lc "bash /opt/blockra/ct/install_blockra.sh"
+msg_ok "Blockra installation completed successfully!"
 
-msg_ok "Blockra installation complete!"
-
+# ---------------------------------------------------------
+# 🌐 Show connection info
+# ---------------------------------------------------------
 IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
-echo -e "\\nAccess Blockra at: http://${IP}:3000\\n"
+[[ -z "$IP" ]] && IP="<container-ip>"
+
+echo -e "\n${INFO} Access your Blockra app at:${CL}"
+echo -e "   🌍  http://${IP}:3000\n"
 
 cat <<'BANNER'
-
- ____   _            _            
-| __ ) | | ___   ___| | ____ __    ____
-|  _ \ | |/ _ \ / __| |/ /|  '__| /    \
-| |_) || | (_) | (__|   < |  |   | /__\ |
-|____(_)_|\___/ \___|_|\_\|__|   |_|  |_|
-
-  /---------------------------------------------\
-  |  Blockra installation complete!             |
-  |  Visit: http://$IP:3000                     |
-  \---------------------------------------------/
+  ____  _            _              _
+ |  _ \| | ___   ___| | _____ _ __ | |__   ___ _ __
+ | |_) | |/ _ \ / __| |/ / _ \ '_ \| '_ \ / _ \ '__|
+ |  _ <| | (_) | (__|   <  __/ |_) | | | |  __/ |
+ |_| \_\_|\___/ \___|_|\_\___| .__/|_| |_|\___|_|
+                             |_|
+   /-----------------------------------------------\
+   |  Blockra installation complete — Have a great day! |
+   \-----------------------------------------------/
 BANNER
-
-exit 0
