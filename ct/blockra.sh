@@ -12,9 +12,9 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
-var_version="${var_version:-12}"      # puoi cambiare in 13 se vuoi
+var_version="${var_version:-12}"      # Cambia in 13 se vuoi Debian 13
 var_unprivileged="${var_unprivileged:-1}"
-var_install=""                        # disattiviamo l'installer community
+var_install=""                        # disattivato
 header_info "$APP"
 variables
 color
@@ -43,10 +43,12 @@ else
 fi
 
 # ---------------------------------------------------------
-# 🚀 Build the container
+# 🚀 Build the container (skip community installer)
 # ---------------------------------------------------------
 msg_info "Creating ${APP} LXC on node $(hostname)..."
-var_install="none"        # evita il 404 di community-scripts
+
+unset var_install   # ✅ FIX definitivo per evitare il 404 community-scripts
+
 build_container
 description
 
