@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # 🧱 Blockra LXC Installer for Proxmox VE (Auto Mode)
-# Author: Angelo-builds + AI-enhanced version
+# Author: Angelo-builds + AI-enhanced version (Final Fix)
 # =========================================================
 
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
@@ -14,12 +14,36 @@ var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-12}"      # Cambia in 13 se vuoi Debian 13
 var_unprivileged="${var_unprivileged:-1}"
-var_install=""                        # disattivato
 header_info "$APP"
 variables
 color
 catch_errors
 start
+
+# ---------------------------------------------------------
+# 🧩 Override build_container to disable remote installer
+# ---------------------------------------------------------
+function build_container() {
+  msg_info "Creating ${APP} container..."
+
+  CTID=$(pve_nextid)
+  TEMPLATE="local:vztmpl/debian-${var_version}-standard_${var_version}-1_amd64.tar.zst"
+
+  pct create ${CTID} ${TEMPLATE} \
+    --hostname blockra \
+    --arch amd64 \
+    --cores ${var_cpu} \
+    --memory ${var_ram} \
+    --swap 512 \
+    --rootfs ${STORAGE}:${var_disk} \
+    --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+    --unprivileged ${var_unprivileged} \
+    --features nesting=1 \
+    --tags ${var_tags} \
+    --start >/dev/null
+
+  msg_ok "LXC Container ${CTID} created and started."
+}
 
 # ---------------------------------------------------------
 # 🔍 Detect default storage automatically
@@ -43,12 +67,9 @@ else
 fi
 
 # ---------------------------------------------------------
-# 🚀 Build the container (skip community installer)
+# 🚀 Build container (no remote installer)
 # ---------------------------------------------------------
 msg_info "Creating ${APP} LXC on node $(hostname)..."
-
-unset var_install   # ✅ FIX definitivo per evitare il 404 community-scripts
-
 build_container
 description
 
